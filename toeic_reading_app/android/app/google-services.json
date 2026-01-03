@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "422498962282",
+    "project_id": "c-reading-app",
+    "storage_bucket": "c-reading-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:422498962282:android:0bfa525a758511197e3313",
+        "android_client_info": {
+          "package_name": "com.example.toeic_reading_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXirID24fppmKJ3-GrbLtANmhjZEntOWc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
