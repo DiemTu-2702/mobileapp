@@ -1,12 +1,18 @@
-import 'dart:convert'; // Thư viện để mã hóa ảnh
+import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// KHÔNG CẦN IMPORT FIREBASE STORAGE NỮA
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../../../../core/theme/theme_cubit.dart';
+
+// --- 1. IMPORT CÁC FILE LIÊN QUAN AUTH ---
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+
+// SỬA LỖI: Import đúng file AuthScreen của bạn
+import '../../../auth/presentation/pages/auth_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -35,20 +41,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _nameController.text = _user?.displayName ?? '';
     _currentPhotoUrl = _user?.photoURL;
+    if (_currentPhotoUrl == null || _currentPhotoUrl!.isEmpty) {
+      _loadPhotoFromFirestore();
+    }
   }
 
-  // --- XỬ LÝ NÚT BACK ---
+  Future<void> _loadPhotoFromFirestore() async {
+    if (_user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(_user!.uid).get();
+      if (doc.exists && doc.data()!.containsKey('photoUrl')) {
+        setState(() {
+          _currentPhotoUrl = doc.data()!['photoUrl'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Lỗi load ảnh: $e");
+    }
+  }
+
   Future<bool> _onWillPop() async {
-    Navigator.pop(context, true); // Trả về true để Profile reload
+    Navigator.pop(context, true);
     return false;
   }
 
-  // --- 1. CHỌN ẢNH VÀ LƯU BASE64 (MIỄN PHÍ, KHÔNG CẦN STORAGE) ---
+  // --- HỘP THOẠI XÁC NHẬN ĐĂNG XUẤT ---
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout, color: Colors.red),
+            SizedBox(width: 10),
+            Text("Đăng xuất", style: TextStyle(color: Colors.red)),
+          ],
+        ),
+        content: const Text("Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này không?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Hủy", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx); // Đóng dialog
+
+              // 1. Gửi sự kiện đăng xuất vào Bloc
+              context.read<AuthBloc>().add(SignOutEvent());
+
+              // 2. Chuyển hướng về màn hình AuthScreen (Thay vì SignInScreen)
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const AuthScreen()), // <--- SỬA LỖI Ở ĐÂY
+                    (route) => false,
+              );
+            },
+            child: const Text("Đăng xuất"),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _pickAndUploadImage(ImageSource source) async {
     final picker = ImagePicker();
-    // QUAN TRỌNG: Phải nén ảnh thật nhỏ để lưu được vào Firestore (giới hạn 1MB)
-    // imageQuality: 25 (Chất lượng thấp)
-    // maxWidth: 512 (Kích thước nhỏ)
     final pickedFile = await picker.pickImage(source: source, imageQuality: 25, maxWidth: 512);
 
     if (pickedFile != null) {
@@ -58,19 +122,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
 
       try {
-        // 1. Đọc file ảnh thành các byte dữ liệu
         final bytes = await _imageFile!.readAsBytes();
-
-        // 2. Mã hóa các byte này thành chuỗi ký tự (Base64)
         String base64Image = base64Encode(bytes);
 
-        // 3. Cập nhật chuỗi này vào Firestore (field: photoUrl)
         await FirebaseFirestore.instance.collection('users').doc(_user!.uid).update({
           'photoUrl': base64Image,
         });
-
-        // (Lưu ý: Ta không update vào Auth.currentUser.updatePhotoURL vì chuỗi này quá dài,
-        // Auth thường chỉ chứa link ngắn. Ta chỉ lưu vào Firestore để hiển thị).
 
         setState(() {
           _currentPhotoUrl = base64Image;
@@ -86,7 +143,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // --- 2. ĐỔI TÊN ---
   Future<void> _updateName() async {
     String newName = _nameController.text.trim();
     if (newName.isEmpty) return;
@@ -108,7 +164,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // --- 3. MENU CHỌN ẢNH ---
   void _showImageSourceActionSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -135,7 +190,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // --- 4. ĐỔI MẬT KHẨU ---
   Future<void> _changePassword() async {
     String oldPass = _oldPassController.text;
     String newPass = _newPassController.text;
@@ -167,17 +221,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // --- HÀM HỖ TRỢ HIỂN THỊ ẢNH (FILE HOẶC BASE64) ---
   ImageProvider? _getDisplayImage() {
     if (_imageFile != null) {
-      return FileImage(_imageFile!); // Ảnh vừa chọn từ máy
+      return FileImage(_imageFile!);
     }
     if (_currentPhotoUrl != null && _currentPhotoUrl!.isNotEmpty) {
       try {
-        // Nếu chuỗi dài (Base64) -> Giải mã
         return MemoryImage(base64Decode(_currentPhotoUrl!));
       } catch (e) {
-        return null; // Lỗi giải mã
+        return null;
       }
     }
     return null;
@@ -193,7 +245,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         appBar: AppBar(
           title: const Text("Cài đặt ứng dụng"),
           centerTitle: true,
-          // Xử lý nút Back trên AppBar
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.pop(context, true),
@@ -203,14 +254,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              // Avatar Section
+              // Avatar
               Center(
                 child: Stack(
                   children: [
                     CircleAvatar(
                       radius: 60,
                       backgroundColor: Colors.grey[300],
-                      // SỬ DỤNG HÀM HIỂN THỊ MỚI
                       backgroundImage: _getDisplayImage(),
                       child: (_imageFile == null && (_currentPhotoUrl == null || _currentPhotoUrl!.isEmpty))
                           ? const Icon(Icons.person, size: 60, color: Colors.white)
@@ -295,6 +345,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: (val) {
                     context.read<ThemeCubit>().toggleTheme(val);
                   },
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              // --- 2. NÚT ĐĂNG XUẤT ---
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 20),
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
+                  ),
+                  icon: const Icon(Icons.logout),
+                  label: const Text("Đăng xuất", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  onPressed: () => _showLogoutDialog(context),
                 ),
               ),
             ],

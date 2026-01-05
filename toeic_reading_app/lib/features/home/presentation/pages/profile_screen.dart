@@ -1,4 +1,4 @@
-import 'dart:convert'; // ĐỂ GIẢI MÃ ẢNH BASE64
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +6,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+
+// --- THAY ĐỔI 1: IMPORT MÀN HÌNH AUTH SCREEN ---
+// (Hãy đảm bảo đường dẫn này đúng với vị trí file AuthScreen của bạn)
+import '../../../auth/presentation/pages/auth_screen.dart';
+
 import 'settings_screen.dart';
 import 'stats_screen.dart';
 import 'history_detail_screen.dart';
@@ -91,11 +96,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e'))); }
   }
 
-  // --- HÀM HỖ TRỢ HIỂN THỊ AVATAR BASE64 ---
   ImageProvider? _getAvatarImage(String? photoUrl) {
     if (photoUrl == null || photoUrl.isEmpty) return null;
     try {
-      // Vì lưu dạng Base64 trực tiếp
       return MemoryImage(base64Decode(photoUrl));
     } catch (e) {
       return null;
@@ -126,19 +129,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: BlocBuilder<AuthBloc, AuthState>(
         builder: (context, state) {
+          // 1. TRẠNG THÁI LOADING
+          if (state is AuthLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // 2. TRẠNG THÁI CHƯA ĐĂNG NHẬP HOẶC LỖI
+          if (state is Unauthenticated || state is AuthError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.person_off, size: 80, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  const Text("Bạn chưa đăng nhập", style: TextStyle(fontSize: 18, color: Colors.grey)),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () {
+                      // --- THAY ĐỔI 2: CHUYỂN HƯỚNG SANG AuthScreen ---
+                      // Dùng Navigator.push để sau khi đăng nhập xong, AuthScreen sẽ pop về đây
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AuthScreen()),
+                      );
+                    },
+                    child: const Text("Đăng nhập ngay"),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // 3. TRẠNG THÁI ĐÃ ĐĂNG NHẬP
           if (state is Authenticated) {
-            final user = FirebaseAuth.instance.currentUser!;
+            final user = FirebaseAuth.instance.currentUser;
+
+            if (user == null) {
+              context.read<AuthBloc>().add(CheckAuthStatusEvent());
+              return const Center(child: CircularProgressIndicator());
+            }
+
             final role = state.user.role;
 
-            // Dùng StreamBuilder để lắng nghe thay đổi thời gian thực từ Firestore
             return StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
                 builder: (context, userSnapshot) {
 
                   String displayName = user.displayName ?? "";
-                  String? photoUrl; // Chuỗi Base64 ảnh
+                  String? photoUrl;
 
-                  // Lấy dữ liệu từ Firestore nếu có
                   if (userSnapshot.hasData && userSnapshot.data!.exists) {
                     final data = userSnapshot.data!.data() as Map<String, dynamic>;
                     if (data['displayName'] != null) displayName = data['displayName'];
@@ -162,7 +201,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               CircleAvatar(
                                 radius: 35,
                                 backgroundColor: Colors.white,
-                                // HIỂN THỊ ẢNH TỪ BASE64
                                 backgroundImage: _getAvatarImage(photoUrl),
                                 child: (photoUrl == null)
                                     ? Text(displayName.isNotEmpty ? displayName[0].toUpperCase() : "U", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.blue[800]))
@@ -241,6 +279,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               StreamBuilder<QuerySnapshot>(
                                 stream: FirebaseFirestore.instance.collection('users').doc(user.uid).collection('history').orderBy('timestamp', descending: true).snapshots(),
                                 builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                    return const Padding(
+                                      padding: EdgeInsets.all(20),
+                                      child: Center(child: CircularProgressIndicator()),
+                                    );
+                                  }
+
                                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                                     return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text("Bạn chưa làm bài thi nào", style: TextStyle(color: textColor.withOpacity(0.6)))));
                                   }
@@ -251,21 +296,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     itemCount: historyDocs.length,
                                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                                     itemBuilder: (context, index) {
-                                      final historyItem = TestHistoryModel.fromSnapshot(historyDocs[index]);
-                                      final scoreColor = historyItem.score >= 300 ? Colors.green : Colors.orange;
+                                      try {
+                                        final historyItem = TestHistoryModel.fromSnapshot(historyDocs[index]);
+                                        final scoreColor = historyItem.score >= 300 ? Colors.green : Colors.orange;
 
-                                      return Card(
-                                        color: cardColor,
-                                        elevation: 2,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        child: ListTile(
-                                          leading: CircleAvatar(backgroundColor: scoreColor.withOpacity(0.15), child: Text("${historyItem.score}", style: TextStyle(color: scoreColor, fontWeight: FontWeight.bold, fontSize: 13))),
-                                          title: Text(historyItem.testTitle, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
-                                          subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(historyItem.date), style: TextStyle(color: textColor.withOpacity(0.6))),
-                                          trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _confirmDelete(context, user.uid, historyDocs[index].id)),
-                                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryDetailScreen(history: historyItem))),
-                                        ),
-                                      );
+                                        return Card(
+                                          color: cardColor,
+                                          elevation: 2,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          child: ListTile(
+                                            leading: CircleAvatar(backgroundColor: scoreColor.withOpacity(0.15), child: Text("${historyItem.score}", style: TextStyle(color: scoreColor, fontWeight: FontWeight.bold, fontSize: 13))),
+                                            title: Text(historyItem.testTitle, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                                            subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(historyItem.date), style: TextStyle(color: textColor.withOpacity(0.6))),
+                                            trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _confirmDelete(context, user.uid, historyDocs[index].id)),
+                                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryDetailScreen(history: historyItem))),
+                                          ),
+                                        );
+                                      } catch (e) {
+                                        return const SizedBox.shrink();
+                                      }
                                     },
                                   );
                                 },
@@ -279,6 +328,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }
             );
           }
+
+          // Fallback
           return const Center(child: CircularProgressIndicator());
         },
       ),
