@@ -8,7 +8,7 @@ import '../../domain/entities/question_entity.dart';
 import '../../data/models/question_model.dart';
 import '../../../../core/utils/score_calculator.dart';
 
-// Kết nối với 2 file con
+// Kết nối với 2 file con (Event và State)
 part 'test_work_event.dart';
 part 'test_work_state.dart';
 
@@ -20,6 +20,9 @@ class TestWorkBloc extends Bloc<TestWorkEvent, TestWorkState> {
     on<StartTestEvent>(_onStartTest);
     on<SelectAnswerEvent>(_onSelectAnswer);
     on<SubmitTestEvent>(_onSubmitTest);
+
+    // 👇 Đăng ký sự kiện TimerTicked
+    on<TimerTicked>(_onTimerTicked);
   }
 
   Future<void> _onStartTest(StartTestEvent event, Emitter<TestWorkState> emit) async {
@@ -39,26 +42,41 @@ class TestWorkBloc extends Bloc<TestWorkEvent, TestWorkState> {
         _questions = _questions.where((q) => q.part == event.filterPart).toList();
       }
 
+      // Khởi tạo thời gian (Tính bằng giây)
       int remainingSeconds = event.minutes * 60;
 
+      // Emit trạng thái ban đầu
       emit(TestInProgress(
           questions: List.from(_questions),
           remainingSeconds: remainingSeconds
       ));
 
+      // 👇 LOGIC TIMER CHUẨN: Dùng biến cục bộ để đếm và add Event
       _timer?.cancel();
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (remainingSeconds > 0) {
-          remainingSeconds--;
-          // Nếu muốn update UI thời gian thực, cần thêm logic emit ở đây
+        remainingSeconds--; // Trừ thời gian
+
+        if (remainingSeconds >= 0) {
+          // Thay vì emit trực tiếp (gây lỗi), ta bắn sự kiện TimerTicked
+          add(TimerTicked(remainingSeconds));
         } else {
           timer.cancel();
+          // Hết giờ -> Tự động nộp bài
           add(SubmitTestEvent(event.testId, "Hết giờ"));
         }
       });
 
     } catch (e) {
       emit(TestError("Lỗi tải đề thi: $e"));
+    }
+  }
+
+  // 👇 HÀM XỬ LÝ SỰ KIỆN TIMER TICKED (CẬP NHẬT UI)
+  void _onTimerTicked(TimerTicked event, Emitter<TestWorkState> emit) {
+    if (state is TestInProgress) {
+      final currentState = state as TestInProgress;
+      // Cập nhật số giây mới, giữ nguyên danh sách câu hỏi
+      emit(currentState.copyWith(remainingSeconds: event.duration));
     }
   }
 
@@ -83,7 +101,7 @@ class TestWorkBloc extends Bloc<TestWorkEvent, TestWorkState> {
   Future<void> _onSubmitTest(SubmitTestEvent event, Emitter<TestWorkState> emit) async {
     if (state is TestInProgress) {
       final currentState = state as TestInProgress;
-      _timer?.cancel();
+      _timer?.cancel(); // Dừng đồng hồ
 
       int correctCount = 0;
       Map<String, int?> userAnswers = {};
@@ -98,7 +116,10 @@ class TestWorkBloc extends Bloc<TestWorkEvent, TestWorkState> {
       int finalScore = 0;
       int totalQuestions = currentState.questions.length;
 
-      if (totalQuestions >= 100) {
+      // Tính điểm (Logic này tùy thuộc vào app của bạn)
+      if (totalQuestions > 0) {
+        // Ví dụ đơn giản: (Số câu đúng / Tổng câu) * 100 hoặc dùng ScoreCalculator
+        // Ở đây tôi dùng ScoreCalculator như code cũ của bạn
         finalScore = ScoreCalculator.getReadingScore(correctCount);
       }
 

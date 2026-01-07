@@ -28,3 +28,10 @@ class SubmitTestEvent extends TestWorkEvent {
 
   const SubmitTestEvent(this.testId, this.testTitle);
 }
+class TimerTicked extends TestWorkEvent {
+  final int duration;
+  const TimerTicked(this.duration);
+
+  @override
+  List<Object?> get props => [duration];
+}

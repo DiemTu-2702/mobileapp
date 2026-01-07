@@ -6,11 +6,14 @@ import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/home/presentation/pages/main_screen.dart';
 import 'features/test_reading/presentation/bloc/test_list_bloc.dart';
 import 'core/theme/theme_cubit.dart';
+import 'features/ai_tutor/presentation/bloc/ai_bloc.dart';
+import 'core/utils/seed_data.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await di.init();
+  // await seedToeicVocabulary();
   runApp(const MyApp());
 }
 
@@ -24,6 +27,7 @@ class MyApp extends StatelessWidget {
         BlocProvider(create: (_) => di.sl<AuthBloc>()..add(CheckAuthStatusEvent())),
         BlocProvider(create: (_) => di.sl<TestListBloc>()),
         BlocProvider(create: (_) => ThemeCubit()),
+        BlocProvider(create: (_) => di.sl<AiBloc>()),
       ],
       child: BlocBuilder<ThemeCubit, ThemeMode>(
         builder: (context, themeMode) {
@@ -40,19 +44,19 @@ class MyApp extends StatelessWidget {
                 centerTitle: true,
                 backgroundColor: Color(0xFF1565C0),
                 foregroundColor: Colors.white,
-                iconTheme: IconThemeData(color: Colors.white), // Icon quay lại màu trắng
+                iconTheme: IconThemeData(color: Colors.white),
               ),
               cardColor: Colors.white,
             ),
 
-            // --- THEME TỐI (Đã chỉnh sửa AppBar) ---
+            // --- THEME TỐI ---
             darkTheme: ThemeData(
               brightness: Brightness.dark,
               primarySwatch: Colors.blue,
               scaffoldBackgroundColor: const Color(0xFF121212),
               appBarTheme: const AppBarTheme(
                 centerTitle: true,
-                backgroundColor: Color(0xFF1F1F1F), // Màu xám đen thay vì xanh
+                backgroundColor: Color(0xFF1F1F1F),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 iconTheme: IconThemeData(color: Colors.white),

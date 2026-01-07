@@ -17,7 +17,15 @@ class TestInProgress extends TestWorkState {
     required this.questions,
     required this.remainingSeconds,
   });
-
+  TestInProgress copyWith({
+    List<QuestionEntity>? questions,
+    int? remainingSeconds,
+  }) {
+    return TestInProgress(
+      questions: questions ?? this.questions,
+      remainingSeconds: remainingSeconds ?? this.remainingSeconds,
+    );
+  }
   @override
   List<Object> get props => [questions, remainingSeconds];
 }

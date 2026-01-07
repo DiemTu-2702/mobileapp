@@ -6,7 +6,6 @@ class MainScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Đây là nơi bạn có thể đặt BottomNavigationBar hoặc Drawer
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ứng dụng TOEIC'),
@@ -15,12 +14,11 @@ class MainScreen extends StatelessWidget {
             icon: const Icon(Icons.logout),
             onPressed: () {
               // TODO: Triển khai logic Logout
-              Navigator.of(context).pushReplacementNamed('/login'); // Giả định có route /login
+              Navigator.of(context).pushReplacementNamed('/login');
             },
           ),
         ],
       ),
-      // Tạm thời hiển thị màn hình danh sách test
       body: const TestListScreen(),
     );
   }

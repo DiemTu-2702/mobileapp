@@ -16,7 +16,7 @@ class TestListScreen extends StatelessWidget {
       length: 4,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Luyện thi TOEIC'),
+          title: const Text('Luyện Đề TOEIC'),
           centerTitle: true,
           backgroundColor: Colors.blue[800],
           foregroundColor: Colors.white,

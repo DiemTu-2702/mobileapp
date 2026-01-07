@@ -4,11 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart'; // Import thư viện biểu đồ
 
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-
-// --- THAY ĐỔI 1: IMPORT MÀN HÌNH AUTH SCREEN ---
-// (Hãy đảm bảo đường dẫn này đúng với vị trí file AuthScreen của bạn)
 import '../../../auth/presentation/pages/auth_screen.dart';
 
 import 'settings_screen.dart';
@@ -30,6 +28,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  // Biến quản lý trạng thái Toggle Button: 0 = Lịch sử làm bài, 1 = Thành tựu
+  int _selectedTab = 0;
 
   Future<void> _refreshUser() async {
     await FirebaseAuth.instance.currentUser?.reload();
@@ -105,6 +105,138 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // --- HÀM VẼ BIỂU ĐỒ TRÒN ---
+  Widget _buildDistributionChart(int p5, int p6, int p7, int full, int total) {
+    if (total == 0) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.pie_chart, color: Colors.blueGrey, size: 20),
+              const SizedBox(width: 8),
+              const Text("Phân bổ luyện tập", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 15),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // BIỂU ĐỒ TRÒN
+              SizedBox(
+                height: 130, // Tăng chiều cao khung chứa
+                width: 130,  // Tăng chiều rộng khung chứa
+                child: PieChart(
+                  PieChartData(
+                    sectionsSpace: 2,
+                    centerSpaceRadius: 30, // Giảm bán kính tâm (cũ là 40)
+                    sections: [
+                      if (p5 > 0) _pieSection(p5, total, Colors.blue),
+                      if (p6 > 0) _pieSection(p6, total, Colors.orange),
+                      if (p7 > 0) _pieSection(p7, total, Colors.purple),
+                      if (full > 0) _pieSection(full, total, Colors.green),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 25),
+              // CHÚ THÍCH
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (p5 > 0) _legendItem(Colors.blue, "Part 5: $p5 bài"),
+                    if (p6 > 0) _legendItem(Colors.orange, "Part 6: $p6 bài"),
+                    if (p7 > 0) _legendItem(Colors.purple, "Part 7: $p7 bài"),
+                    if (full > 0) _legendItem(Colors.green, "Full Test: $full bài"),
+                    const Divider(height: 15),
+                    Text("Tổng cộng: $total bài", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12)),
+                  ],
+                ),
+              )
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Đã giảm radius xuống còn 35 (Tổng bán kính = 30 + 35 = 65 -> Đường kính 130, vừa khít khung)
+  PieChartSectionData _pieSection(int value, int total, Color color) {
+    return PieChartSectionData(
+      color: color,
+      value: value.toDouble(),
+      title: '${((value / total) * 100).toStringAsFixed(0)}%',
+      radius: 35, // Giảm độ dày vòng tròn (cũ là 50)
+      titleStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+    );
+  }
+
+  Widget _legendItem(Color color, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Text(text, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET TOGGLE BUTTON ---
+  Widget _buildToggleButton() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      height: 45,
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(25),
+      ),
+      child: Row(
+        children: [
+          _buildToggleItem("Lịch sử làm bài", 0),
+          _buildToggleItem("Thành tựu", 1),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleItem(String title, int index) {
+    final bool isSelected = _selectedTab == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedTab = index),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.blue : Colors.transparent,
+            borderRadius: BorderRadius.circular(25),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isSelected ? Colors.white : Colors.grey[600],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -129,12 +261,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: BlocBuilder<AuthBloc, AuthState>(
         builder: (context, state) {
-          // 1. TRẠNG THÁI LOADING
           if (state is AuthLoading) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // 2. TRẠNG THÁI CHƯA ĐĂNG NHẬP HOẶC LỖI
           if (state is Unauthenticated || state is AuthError) {
             return Center(
               child: Column(
@@ -146,12 +276,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: () {
-                      // --- THAY ĐỔI 2: CHUYỂN HƯỚNG SANG AuthScreen ---
-                      // Dùng Navigator.push để sau khi đăng nhập xong, AuthScreen sẽ pop về đây
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const AuthScreen()),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
                     },
                     child: const Text("Đăng nhập ngay"),
                   ),
@@ -160,7 +285,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             );
           }
 
-          // 3. TRẠNG THÁI ĐÃ ĐĂNG NHẬP
           if (state is Authenticated) {
             final user = FirebaseAuth.instance.currentUser;
 
@@ -227,6 +351,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Nút Admin
                               if (role == 'admin')
                                 Container(
                                   margin: const EdgeInsets.only(bottom: 10),
@@ -273,52 +398,100 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ),
 
-                              Text("Lịch sử làm bài", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+                              // TOGGLE BUTTON (Lịch sử làm bài | Thành tựu)
+                              _buildToggleButton(),
                               const SizedBox(height: 10),
 
-                              StreamBuilder<QuerySnapshot>(
-                                stream: FirebaseFirestore.instance.collection('users').doc(user.uid).collection('history').orderBy('timestamp', descending: true).snapshots(),
-                                builder: (context, snapshot) {
-                                  if (snapshot.connectionState == ConnectionState.waiting) {
-                                    return const Padding(
-                                      padding: EdgeInsets.all(20),
-                                      child: Center(child: CircularProgressIndicator()),
+                              // NỘI DUNG THAY ĐỔI THEO TOGGLE
+                              if (_selectedTab == 0)
+                              // TAB 0: LỊCH SỬ (Biểu đồ + Danh sách)
+                                StreamBuilder<QuerySnapshot>(
+                                  stream: FirebaseFirestore.instance.collection('users').doc(user.uid).collection('history').orderBy('timestamp', descending: true).snapshots(),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.connectionState == ConnectionState.waiting) {
+                                      return const Padding(
+                                        padding: EdgeInsets.all(20),
+                                        child: Center(child: CircularProgressIndicator()),
+                                      );
+                                    }
+
+                                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                                      return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text("Bạn chưa làm bài thi nào", style: TextStyle(color: textColor.withOpacity(0.6)))));
+                                    }
+
+                                    final historyDocs = snapshot.data!.docs;
+
+                                    // Logic tính toán biểu đồ
+                                    int countP5 = 0, countP6 = 0, countP7 = 0, countFull = 0;
+                                    for (var doc in historyDocs) {
+                                      final data = doc.data() as Map<String, dynamic>;
+                                      final title = (data['testTitle'] ?? "").toString();
+                                      if (title.contains('Part 5')) countP5++;
+                                      else if (title.contains('Part 6')) countP6++;
+                                      else if (title.contains('Part 7')) countP7++;
+                                      else if (title.toLowerCase().contains('full')) countFull++;
+                                    }
+                                    int total = countP5 + countP6 + countP7 + countFull;
+
+                                    return Column(
+                                      children: [
+                                        // Biểu đồ phân tích
+                                        _buildDistributionChart(countP5, countP6, countP7, countFull, total),
+
+                                        // Danh sách bài làm
+                                        ListView.separated(
+                                          shrinkWrap: true,
+                                          physics: const NeverScrollableScrollPhysics(),
+                                          itemCount: historyDocs.length,
+                                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                          itemBuilder: (context, index) {
+                                            try {
+                                              final historyItem = TestHistoryModel.fromSnapshot(historyDocs[index]);
+                                              final scoreColor = historyItem.score >= 300 ? Colors.green : Colors.orange;
+
+                                              return Card(
+                                                color: cardColor,
+                                                elevation: 2,
+                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                child: ListTile(
+                                                  leading: CircleAvatar(backgroundColor: scoreColor.withOpacity(0.15), child: Text("${historyItem.score}", style: TextStyle(color: scoreColor, fontWeight: FontWeight.bold, fontSize: 13))),
+                                                  title: Text(historyItem.testTitle, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                                                  subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(historyItem.date), style: TextStyle(color: textColor.withOpacity(0.6))),
+                                                  trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _confirmDelete(context, user.uid, historyDocs[index].id)),
+                                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryDetailScreen(history: historyItem))),
+                                                ),
+                                              );
+                                            } catch (e) {
+                                              return const SizedBox.shrink();
+                                            }
+                                          },
+                                        ),
+                                      ],
                                     );
-                                  }
-
-                                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                                    return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text("Bạn chưa làm bài thi nào", style: TextStyle(color: textColor.withOpacity(0.6)))));
-                                  }
-                                  final historyDocs = snapshot.data!.docs;
-                                  return ListView.separated(
-                                    shrinkWrap: true,
-                                    physics: const NeverScrollableScrollPhysics(),
-                                    itemCount: historyDocs.length,
-                                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                                    itemBuilder: (context, index) {
-                                      try {
-                                        final historyItem = TestHistoryModel.fromSnapshot(historyDocs[index]);
-                                        final scoreColor = historyItem.score >= 300 ? Colors.green : Colors.orange;
-
-                                        return Card(
-                                          color: cardColor,
-                                          elevation: 2,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                          child: ListTile(
-                                            leading: CircleAvatar(backgroundColor: scoreColor.withOpacity(0.15), child: Text("${historyItem.score}", style: TextStyle(color: scoreColor, fontWeight: FontWeight.bold, fontSize: 13))),
-                                            title: Text(historyItem.testTitle, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
-                                            subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(historyItem.date), style: TextStyle(color: textColor.withOpacity(0.6))),
-                                            trailing: IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _confirmDelete(context, user.uid, historyDocs[index].id)),
-                                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryDetailScreen(history: historyItem))),
-                                          ),
-                                        );
-                                      } catch (e) {
-                                        return const SizedBox.shrink();
-                                      }
-                                    },
-                                  );
-                                },
-                              ),
+                                  },
+                                )
+                              else
+                              // TAB 1: THÀNH TỰU (Placeholder)
+                                Container(
+                                  height: 200,
+                                  width: double.infinity,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[100],
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.grey.shade300),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.emoji_events_outlined, size: 60, color: Colors.amber[700]),
+                                      const SizedBox(height: 10),
+                                      const Text("Tính năng Thành tựu", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 5),
+                                      const Text("Sẽ sớm ra mắt!", style: TextStyle(color: Colors.grey)),
+                                    ],
+                                  ),
+                                ),
                             ],
                           ),
                         ),
